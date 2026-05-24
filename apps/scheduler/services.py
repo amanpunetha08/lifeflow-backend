@@ -70,34 +70,47 @@ def generate_daily_tasks():
 
 
 def process_expired_tasks():
-    """Process tasks that have passed the user's day_end_time."""
+    """Process tasks that have passed the user's day_end_time. Reset daily tasks for new day."""
     now = timezone.now()
+    today = now.date()
     from django.contrib.auth import get_user_model
     User = get_user_model()
 
     for user in User.objects.all():
         # Check if current time is past user's day end
-        user_day_end = timezone.make_aware(
-            timezone.datetime.combine(now.date(), user.day_end_time)
-        )
-        if now < user_day_end:
-            continue
+        user_day_end_naive = timezone.datetime.combine(today, user.day_end_time)
+        user_day_end = timezone.make_aware(user_day_end_naive)
 
-        # Get all pending tasks for this user today
-        pending_tasks = Task.objects.filter(
-            user=user,
-            status__in=[Task.Status.TODO, Task.Status.IN_PROGRESS],
-            start_time__date__lte=now.date(),
-        )
+        # Only process tasks from BEFORE today (yesterday or earlier that are still pending)
+        # OR today's tasks if we're past day_end
+        if now < user_day_end:
+            # Not past day end yet — only process tasks from previous days
+            pending_tasks = Task.objects.filter(
+                user=user,
+                status__in=[Task.Status.TODO, Task.Status.IN_PROGRESS],
+                start_time__date__lt=today,
+            )
+        else:
+            # Past day end — process today's tasks too
+            pending_tasks = Task.objects.filter(
+                user=user,
+                status__in=[Task.Status.TODO, Task.Status.IN_PROGRESS],
+                start_time__date__lte=today,
+            )
+
+        if not pending_tasks.exists():
+            # Still reset daily tasks for new day
+            _reset_daily_tasks(user, now)
+            continue
 
         for task in pending_tasks:
             if task.is_recurring and not task.parent_task:
-                # Daily recurring: mark missed, apply penalty, don't roll over
                 task.status = Task.Status.MISSED
                 task.save()
 
                 user.discipline_score = max(0, user.discipline_score - 2)
                 user.chaos_meter = min(100, user.chaos_meter + 3)
+                user.streak_count = 0
                 user.save()
 
                 XPLog.objects.create(
@@ -107,12 +120,7 @@ def process_expired_tasks():
                 ScheduledEvent.objects.create(
                     user=user, task=task, event_type=ScheduledEvent.EventType.MISSED
                 )
-                ScheduledEvent.objects.create(
-                    user=user, task=task, event_type=ScheduledEvent.EventType.PENALTY_APPLIED,
-                    details={'penalty': task.penalty_points}
-                )
             else:
-                # Non-recurring / timeframe subtask: roll over to tomorrow
                 tomorrow = (now + timedelta(days=1)).date()
                 tomorrow_start = timezone.make_aware(
                     timezone.datetime.combine(tomorrow, user.day_start_time)
@@ -139,6 +147,64 @@ def process_expired_tasks():
                 ScheduledEvent.objects.create(
                     user=user, task=task, event_type=ScheduledEvent.EventType.ROLLED_OVER
                 )
+
+        _reset_daily_tasks(user, now)
+
+
+def _reset_daily_tasks(user, now):
+    """Create fresh daily task instances for today if they don't exist yet."""
+    today = now.date()
+
+    # Find all completed or missed daily tasks to use as templates
+    daily_templates = Task.objects.filter(
+        user=user,
+        is_recurring=True,
+        task_type='daily',
+        parent_task__isnull=True,
+    ).values_list('title', flat=True).distinct()
+
+    for title in daily_templates:
+        # Check if a TODO instance for today already exists
+        already_exists = Task.objects.filter(
+            user=user,
+            title=title,
+            is_recurring=True,
+            task_type='daily',
+            status=Task.Status.TODO,
+            start_time__date=today,
+        ).exists()
+
+        if already_exists:
+            continue
+
+        # Get the latest version of this task as template
+        template = Task.objects.filter(
+            user=user, title=title, is_recurring=True, task_type='daily',
+        ).order_by('-created_at').first()
+
+        if template:
+            Task.objects.create(
+                user=user,
+                title=template.title,
+                description=template.description,
+                task_type='daily',
+                priority=Task.Priority.HIGH,
+                status=Task.Status.TODO,
+                tags=template.tags,
+                category=template.category,
+                color=template.color,
+                icon=template.icon,
+                is_recurring=True,
+                recurrence_type='daily',
+                xp_reward=10,
+                penalty_points=template.penalty_points,
+                start_time=timezone.make_aware(
+                    timezone.datetime.combine(today, user.day_start_time)
+                ),
+                end_time=timezone.make_aware(
+                    timezone.datetime.combine(today, user.day_end_time)
+                ),
+            )
 
 
 def update_daily_streaks():

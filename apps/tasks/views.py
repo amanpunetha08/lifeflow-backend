@@ -59,12 +59,11 @@ class TaskViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def today(self, request):
         today = timezone.now().date()
-        # Show: daily tasks, today's subtasks of timeframe tasks, and piled-up missed subtasks
+        # Show: today's tasks (daily + subtasks scheduled for today + piled-up subtasks)
         tasks = self.get_queryset().filter(
-            Q(task_type='daily', parent_task__isnull=True) |
-            Q(parent_task__isnull=False, original_date__lte=today, status__in=['todo', 'in_progress']) |
-            Q(parent_task__isnull=False, original_date=today)
-        ).distinct()
+            Q(start_time__date=today, status__in=['todo', 'in_progress', 'completed']) |
+            Q(parent_task__isnull=False, status__in=['todo', 'in_progress'], start_time__date__lte=today)
+        ).exclude(status='missed').distinct()
         return Response(TaskListSerializer(tasks, many=True).data)
 
     @action(detail=False, methods=['get'])
