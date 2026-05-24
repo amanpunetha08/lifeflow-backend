@@ -8,6 +8,7 @@ class User(AbstractUser):
     onboarding_completed = models.BooleanField(default=False)
     day_start_time = models.TimeField(default='09:00:00')
     day_end_time = models.TimeField(default='23:00:00')
+    last_processed_date = models.DateField(null=True, blank=True)
     level = models.PositiveIntegerField(default=1)
     xp = models.PositiveIntegerField(default=0)
     total_xp = models.PositiveIntegerField(default=0)
