@@ -48,7 +48,7 @@ def process_expired_tasks():
 
         # Check if it's past user's day_end_time OR it's a new day
         user_day_end = timezone.make_aware(
-            timezone.datetime.combine(today, user.day_end_time)
+            timezone.datetime.combine(today, user.day_end_time), IST
         )
 
         # If it's still today and before day_end, only process if last_processed < yesterday
@@ -121,10 +121,10 @@ def process_expired_tasks():
                 original_date=task.original_date or (task.start_time.date() if task.start_time else yesterday),
                 parent_task=task.parent_task,
                 start_time=timezone.make_aware(
-                    timezone.datetime.combine(today, user.day_start_time)
+                    timezone.datetime.combine(today, user.day_start_time), IST
                 ),
                 end_time=timezone.make_aware(
-                    timezone.datetime.combine(today, user.day_end_time)
+                    timezone.datetime.combine(today, user.day_end_time), IST
                 ),
             )
 
@@ -208,10 +208,10 @@ def _create_today_daily_tasks(user, today):
                 xp_reward=10,
                 penalty_points=template.penalty_points,
                 start_time=timezone.make_aware(
-                    timezone.datetime.combine(today, user.day_start_time)
+                    timezone.datetime.combine(today, user.day_start_time), IST
                 ),
                 end_time=timezone.make_aware(
-                    timezone.datetime.combine(today, user.day_end_time)
+                    timezone.datetime.combine(today, user.day_end_time), IST
                 ),
             )
 

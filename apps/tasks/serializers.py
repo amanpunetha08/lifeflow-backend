@@ -1,7 +1,10 @@
 from rest_framework import serializers
 from django.utils import timezone
 from datetime import timedelta
+import zoneinfo
 from .models import Task, Tag
+
+IST = zoneinfo.ZoneInfo('Asia/Kolkata')
 
 
 class TagSerializer(serializers.ModelSerializer):
@@ -42,18 +45,18 @@ class TaskSerializer(serializers.ModelSerializer):
             validated_data['recurrence_type'] = 'daily'
             validated_data['priority'] = Task.Priority.HIGH
             validated_data['xp_reward'] = 10
-            # Schedule using user's day times
-            today = timezone.now().date()
+            # Schedule using user's day times in IST
+            today = timezone.now().astimezone(IST).date()
             validated_data['start_time'] = timezone.make_aware(
-                timezone.datetime.combine(today, user.day_start_time)
+                timezone.datetime.combine(today, user.day_start_time), IST
             )
             validated_data['end_time'] = timezone.make_aware(
-                timezone.datetime.combine(today, user.day_end_time)
+                timezone.datetime.combine(today, user.day_end_time), IST
             )
 
         elif task_type == 'timeframe':
             days = validated_data.get('timeframe_days', 1)
-            start_date = validated_data.get('timeframe_start_date') or timezone.now().date()
+            start_date = validated_data.get('timeframe_start_date') or timezone.now().astimezone(IST).date()
             validated_data['timeframe_start_date'] = start_date
             validated_data['timeframe_end_date'] = start_date + timedelta(days=days - 1)
             validated_data['xp_reward'] = 10
@@ -80,10 +83,10 @@ class TaskSerializer(serializers.ModelSerializer):
                     penalty_points=task.penalty_points,
                     original_date=date,
                     start_time=timezone.make_aware(
-                        timezone.datetime.combine(date, user.day_start_time)
+                        timezone.datetime.combine(date, user.day_start_time), IST
                     ),
                     end_time=timezone.make_aware(
-                        timezone.datetime.combine(date, user.day_end_time)
+                        timezone.datetime.combine(date, user.day_end_time), IST
                     ),
                 )
 
