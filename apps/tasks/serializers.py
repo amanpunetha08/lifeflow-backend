@@ -53,7 +53,7 @@ class TaskSerializer(serializers.ModelSerializer):
 
         elif task_type == 'timeframe':
             days = validated_data.get('timeframe_days', 1)
-            start_date = timezone.now().date()
+            start_date = validated_data.get('timeframe_start_date') or timezone.now().date()
             validated_data['timeframe_start_date'] = start_date
             validated_data['timeframe_end_date'] = start_date + timedelta(days=days - 1)
             validated_data['xp_reward'] = 10
