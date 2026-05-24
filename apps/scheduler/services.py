@@ -1,8 +1,11 @@
 from django.utils import timezone
 from datetime import timedelta
+import zoneinfo
 from apps.tasks.models import Task
 from apps.gamification.models import XPLog, StreakRecord
 from .models import RecurringRule, ScheduledEvent
+
+IST = zoneinfo.ZoneInfo('Asia/Kolkata')
 
 # Demerit points by priority
 DEMERIT_POINTS = {
@@ -11,6 +14,11 @@ DEMERIT_POINTS = {
     'low': {'xp': -2, 'discipline': -1, 'chaos': 1},
     'urgent': {'xp': -10, 'discipline': -3, 'chaos': 5},
 }
+
+
+def _today():
+    """Get today's date in IST."""
+    return timezone.now().astimezone(IST).date()
 
 
 def process_expired_tasks():
@@ -27,7 +35,7 @@ def process_expired_tasks():
     6. Mark last_processed_date = today
     """
     now = timezone.now()
-    today = now.date()
+    today = _today()
     yesterday = today - timedelta(days=1)
 
     from django.contrib.auth import get_user_model
@@ -210,7 +218,7 @@ def _create_today_daily_tasks(user, today):
 
 def generate_daily_tasks():
     """Generate today's recurring task instances for all active rules."""
-    today = timezone.now().date()
+    today = _today()
     day_of_week = today.weekday()
 
     rules = RecurringRule.objects.filter(
@@ -268,7 +276,7 @@ def generate_daily_tasks():
 
 def update_daily_streaks():
     """Update streak records at end of day."""
-    today = timezone.now().date()
+    today = _today()
 
     from django.contrib.auth import get_user_model
     User = get_user_model()

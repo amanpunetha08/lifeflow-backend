@@ -58,10 +58,14 @@ class TaskViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def today(self, request):
-        today = timezone.now().date()
+        from django.utils import timezone as tz
+        import zoneinfo
+        tz.activate(zoneinfo.ZoneInfo('Asia/Kolkata'))
+        today = tz.localdate()
         tasks = self.get_queryset().filter(
             start_time__date=today,
         ).exclude(status='missed')
+        tz.deactivate()
         return Response(TaskListSerializer(tasks, many=True).data)
 
     @action(detail=False, methods=['get'])
