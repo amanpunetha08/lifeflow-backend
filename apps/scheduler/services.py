@@ -46,6 +46,9 @@ def process_expired_tasks():
         if user.last_processed_date == today:
             continue
 
+        # Activate IST for date lookups
+        timezone.activate(IST)
+
         # Check if it's past user's day_end_time OR it's a new day
         user_day_end = timezone.make_aware(
             timezone.datetime.combine(today, user.day_end_time), IST
@@ -155,6 +158,7 @@ def process_expired_tasks():
         _create_today_daily_tasks(user, today)
 
         # --- STEP 7: Mark as processed ---
+        timezone.deactivate()
         user.last_processed_date = today
         user.save()
 
