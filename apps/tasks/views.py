@@ -60,7 +60,15 @@ class TaskViewSet(viewsets.ModelViewSet):
     def today(self, request):
         from django.utils import timezone as tz
         import zoneinfo
-        tz.activate(zoneinfo.ZoneInfo('Asia/Kolkata'))
+        from apps.scheduler.services import process_expired_tasks
+
+        # Auto-process if not yet done today
+        ist = zoneinfo.ZoneInfo('Asia/Kolkata')
+        today = tz.now().astimezone(ist).date()
+        if request.user.last_processed_date != today:
+            process_expired_tasks()
+
+        tz.activate(ist)
         today = tz.localdate()
         tasks = self.get_queryset().filter(
             start_time__date=today,
