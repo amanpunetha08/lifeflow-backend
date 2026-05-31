@@ -48,6 +48,10 @@ class TaskSerializer(serializers.ModelSerializer):
             xp = PRIORITY_XP.get(priority, 8)
             validated_data["xp_reward"] = xp
             validated_data["penalty_points"] = xp * 2
+            # Don't set start_time on parent if it has subtasks
+            if validated_data.get("timeframe_days"):
+                validated_data.pop("start_time", None)
+                validated_data.pop("end_time", None)
 
         task = super().create(validated_data)
 
