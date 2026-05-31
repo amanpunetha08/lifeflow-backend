@@ -19,12 +19,12 @@ class AnalyticsView(APIView):
         now = timezone.now().astimezone(IST)
         today = now.date()
         timezone.activate(IST)
-        week_start = today - timedelta(days=today.weekday())  # Monday
-        week_end = week_start + timedelta(days=6)
+        week_start = today - timedelta(days=6)  # Last 7 days
+        week_end = today
         last_week_start = week_start - timedelta(days=7)
         last_week_end = week_start - timedelta(days=1)
 
-        # This week's tasks
+        # Last 7 days tasks
         week_tasks = Task.objects.filter(user=user, start_time__date__gte=week_start, start_time__date__lte=week_end)
         last_week_tasks = Task.objects.filter(user=user, start_time__date__gte=last_week_start, start_time__date__lte=last_week_end)
 
@@ -60,15 +60,15 @@ class AnalyticsView(APIView):
         }
 
         # Weekly trend
-        days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+        day_names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
         weekly_trend = []
-        for i, day_name in enumerate(days):
+        for i in range(7):
             d = week_start + timedelta(days=i)
             day_tasks = week_tasks.filter(start_time__date=d)
             day_total = day_tasks.count()
             day_completed = day_tasks.filter(status="completed").count()
             score = int(day_completed / day_total * 100) if day_total else 0
-            weekly_trend.append({"day": day_name, "tasks": day_completed, "score": score})
+            weekly_trend.append({"day": day_names[d.weekday()], "tasks": day_completed, "score": score})
 
         # Task breakdown
         task_breakdown = {
@@ -90,22 +90,22 @@ class AnalyticsView(APIView):
 
         # Daily XP
         daily_xp = []
-        for i, day_name in enumerate(days):
+        for i in range(7):
             d = week_start + timedelta(days=i)
             xp = XPLog.objects.filter(user=user, created_at__date=d, amount__gt=0).aggregate(s=Sum("amount"))["s"] or 0
-            daily_xp.append({"day": day_name, "xp": xp})
+            daily_xp.append({"day": day_names[d.weekday()], "xp": xp})
 
         # Streak history
-        thirty_days_ago = today - timedelta(days=30)
-        streak_history = list(
-            StreakRecord.objects.filter(user=user, date__gte=thirty_days_ago)
-            .order_by("-date")
-            .values("date", "tasks_completed", "tasks_total")
-        )
-        streak_history = [
-            {"date": str(r["date"]), "completed": r["tasks_completed"], "total": r["tasks_total"]}
-            for r in streak_history
-        ]
+        # Streak history - build from actual tasks (last 90 days)
+        ninety_days_ago = today - timedelta(days=90)
+        streak_history = []
+        for i in range(90):
+            d = ninety_days_ago + timedelta(days=i)
+            day_tasks = Task.objects.filter(user=user, start_time__date=d)
+            total = day_tasks.count()
+            completed = day_tasks.filter(status="completed").count()
+            if total > 0:
+                streak_history.append({"date": str(d), "completed": completed, "total": total})
 
         timezone.deactivate()
         return Response({
