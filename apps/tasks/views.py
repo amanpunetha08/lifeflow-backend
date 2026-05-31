@@ -1,11 +1,48 @@
-from rest_framework import viewsets, status, mixins
+import zoneinfo
+from django.utils import timezone
+from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from django.utils import timezone
-from django.db.models import Q
-from django_filters.rest_framework import DjangoFilterBackend
 from .models import Task, Tag
-from .serializers import TaskSerializer, TaskListSerializer, TagSerializer
+from .serializers import TaskSerializer, TagSerializer
+
+IST = zoneinfo.ZoneInfo("Asia/Kolkata")
+
+
+class TaskViewSet(viewsets.ModelViewSet):
+    serializer_class = TaskSerializer
+
+    def get_queryset(self):
+        return Task.objects.filter(user=self.request.user).order_by("-created_at")
+
+    @action(detail=True, methods=["post"])
+    def complete(self, request, pk=None):
+        task = self.get_object()
+        task.status = "completed"
+        task.completed_at = timezone.now()
+        task.completion_percentage = 100
+        task.save()
+        user = request.user
+        user.add_xp(task.xp_reward)
+        user.coins += max(1, task.xp_reward // 2)
+        user.total_completed_tasks += 1
+        user.discipline_score = min(100, user.discipline_score + 1)
+        user.chaos_meter = max(0, user.chaos_meter - 1)
+        user.save()
+        return Response(TaskSerializer(task).data)
+
+    @action(detail=False, methods=["get"])
+    def today(self, request):
+        today = timezone.now().astimezone(IST).date()
+        timezone.activate(IST)
+        tasks = self.get_queryset().filter(start_time__date=today).exclude(status='missed')
+        timezone.deactivate()
+        return Response(TaskSerializer(tasks, many=True).data)
+
+    @action(detail=False, methods=["get"])
+    def missed(self, request):
+        tasks = self.get_queryset().filter(status="missed")
+        return Response(TaskSerializer(tasks, many=True).data)
 
 
 class TagViewSet(viewsets.ModelViewSet):
@@ -14,69 +51,5 @@ class TagViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         return Tag.objects.filter(user=self.request.user)
 
-
-class TaskViewSet(viewsets.ModelViewSet):
-    serializer_class = TaskSerializer
-    filter_backends = [DjangoFilterBackend]
-    filterset_fields = ['status', 'priority', 'category', 'is_recurring', 'recurrence_type', 'task_type']
-
-    def get_queryset(self):
-        return Task.objects.filter(user=self.request.user)
-
-    def get_serializer_class(self):
-        if self.action == 'list':
-            return TaskListSerializer
-        return TaskSerializer
-
-    @action(detail=True, methods=['post'])
-    def complete(self, request, pk=None):
-        task = self.get_object()
-        task.status = Task.Status.COMPLETED
-        task.completed_at = timezone.now()
-        task.completion_percentage = 100.0
-        if task.start_time and task.completed_at:
-            task.actual_duration = int((task.completed_at - task.start_time).total_seconds() / 60)
-        task.save()
-
-        # Award XP
-        user = request.user
-        user.add_xp(task.xp_reward)
-        user.total_completed_tasks += 1
-        user.coins += 1
-        user.save()
-
-        # If all subtasks of parent are completed, mark parent completed
-        if task.parent_task:
-            parent = task.parent_task
-            if parent.subtasks.exclude(status=Task.Status.COMPLETED).count() == 0:
-                parent.status = Task.Status.COMPLETED
-                parent.completed_at = timezone.now()
-                parent.completion_percentage = 100.0
-                parent.save()
-
-        return Response(TaskSerializer(task).data)
-
-    @action(detail=False, methods=['get'])
-    def today(self, request):
-        from django.utils import timezone as tz
-        import zoneinfo
-        from apps.scheduler.services import process_expired_tasks
-
-        # Auto-process if not yet done today
-        ist = zoneinfo.ZoneInfo('Asia/Kolkata')
-        today = tz.now().astimezone(ist).date()
-        if request.user.last_processed_date != today:
-            process_expired_tasks()
-
-        tz.activate(ist)
-        today = tz.localdate()
-        tasks = self.get_queryset().filter(
-            start_time__date=today,
-        ).exclude(status='missed')
-        tz.deactivate()
-        return Response(TaskListSerializer(tasks, many=True).data)
-
-    @action(detail=False, methods=['get'])
-    def missed(self, request):
-        tasks = self.get_queryset().filter(status=Task.Status.MISSED)
-        return Response(TaskListSerializer(tasks, many=True).data)
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)

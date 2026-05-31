@@ -1,11 +1,10 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import RecurringRuleViewSet, ScheduledEventViewSet
+from .views import SchedulerViewSet
 
 router = DefaultRouter()
-router.register('rules', RecurringRuleViewSet, basename='recurring-rule')
-router.register('events', ScheduledEventViewSet, basename='scheduled-event')
+router.register(r"scheduler", SchedulerViewSet, basename="scheduler")
 
 urlpatterns = [
-    path('', include(router.urls)),
+    path("", include(router.urls)),
 ]

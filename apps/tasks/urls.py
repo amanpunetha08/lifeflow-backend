@@ -3,9 +3,9 @@ from rest_framework.routers import DefaultRouter
 from .views import TaskViewSet, TagViewSet
 
 router = DefaultRouter()
-router.register('tags', TagViewSet, basename='tag')
-router.register('', TaskViewSet, basename='task')
+router.register(r"tasks", TaskViewSet, basename="task")
+router.register(r"tags", TagViewSet, basename="tag")
 
 urlpatterns = [
-    path('', include(router.urls)),
+    path("", include(router.urls)),
 ]

@@ -5,7 +5,7 @@ from .models import Achievement, UserAchievement, XPLog, StreakRecord, DailyChal
 class AchievementSerializer(serializers.ModelSerializer):
     class Meta:
         model = Achievement
-        fields = '__all__'
+        fields = "__all__"
 
 
 class UserAchievementSerializer(serializers.ModelSerializer):
@@ -13,25 +13,25 @@ class UserAchievementSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = UserAchievement
-        fields = ('id', 'achievement', 'unlocked_at')
+        fields = "__all__"
 
 
 class XPLogSerializer(serializers.ModelSerializer):
     class Meta:
         model = XPLog
-        fields = ('id', 'amount', 'reason', 'task', 'created_at')
+        fields = "__all__"
 
 
 class StreakRecordSerializer(serializers.ModelSerializer):
     class Meta:
         model = StreakRecord
-        fields = '__all__'
+        fields = "__all__"
 
 
 class DailyChallengeSerializer(serializers.ModelSerializer):
     class Meta:
         model = DailyChallenge
-        fields = '__all__'
+        fields = "__all__"
 
 
 class UserDailyChallengeSerializer(serializers.ModelSerializer):
@@ -39,4 +39,4 @@ class UserDailyChallengeSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = UserDailyChallenge
-        fields = ('id', 'challenge', 'progress', 'is_completed', 'completed_at')
+        fields = "__all__"
