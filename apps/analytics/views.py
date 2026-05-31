@@ -1,6 +1,7 @@
 import zoneinfo
 from datetime import timedelta
 from django.db.models import Sum, Q, Count
+from django.db.models.functions import TruncDate
 from django.utils import timezone
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -96,16 +97,19 @@ class AnalyticsView(APIView):
             daily_xp.append({"day": day_names[d.weekday()], "xp": xp})
 
         # Streak history
-        # Streak history - build from actual tasks (last 90 days)
+        # Streak history - build from actual tasks (last 90 days) using single query
         ninety_days_ago = today - timedelta(days=90)
-        streak_history = []
-        for i in range(90):
-            d = ninety_days_ago + timedelta(days=i)
-            day_tasks = Task.objects.filter(user=user, start_time__date=d)
-            total = day_tasks.count()
-            completed = day_tasks.filter(status="completed").count()
-            if total > 0:
-                streak_history.append({"date": str(d), "completed": completed, "total": total})
+        from django.db.models.functions import TruncDate
+        streak_data = (
+            Task.objects.filter(user=user, start_time__date__gte=ninety_days_ago)
+            .values(day=TruncDate('start_time'))
+            .annotate(total=Count('id'), completed=Count('id', filter=Q(status='completed')))
+            .order_by('day')
+        )
+        streak_history = [
+            {"date": str(r["day"]), "completed": r["completed"], "total": r["total"]}
+            for r in streak_data if r["total"] > 0
+        ]
 
         timezone.deactivate()
         return Response({
