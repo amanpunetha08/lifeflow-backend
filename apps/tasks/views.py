@@ -1,8 +1,12 @@
 import zoneinfo
+from datetime import timedelta
+from django.db.models import Count, Q
 from django.utils import timezone
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.views import APIView
 from .models import Task, Tag
 from .serializers import TaskSerializer, TagSerializer
 
@@ -17,6 +21,7 @@ class TaskViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"])
     def complete(self, request, pk=None):
+        from apps.gamification.models import XPLog
         task = self.get_object()
         task.status = "completed"
         task.completed_at = timezone.now()
@@ -29,6 +34,7 @@ class TaskViewSet(viewsets.ModelViewSet):
         user.discipline_score = min(100, user.discipline_score + 1)
         user.chaos_meter = max(0, user.chaos_meter - 1)
         user.save()
+        XPLog.objects.create(user=user, amount=task.xp_reward, reason=f"Completed: {task.title}", task=task)
         return Response(TaskSerializer(task).data)
 
     @action(detail=False, methods=["get"])
@@ -119,3 +125,38 @@ class TagViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
+
+
+class HabitsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        now = timezone.now().astimezone(IST)
+        today = now.date()
+        week_start = today - timedelta(days=today.weekday())
+
+        habits = Task.objects.filter(user=user, is_recurring=True, recurrence_type="daily").values_list("title", flat=True).distinct()
+        result = []
+        for title in habits:
+            # Weekly completion per day (Mon-Sun)
+            weekly = []
+            for i in range(7):
+                d = week_start + timedelta(days=i)
+                done = Task.objects.filter(user=user, title=title, is_recurring=True, status="completed", start_time__date=d).exists()
+                weekly.append(done)
+
+            # Current streak
+            streak = 0
+            check_date = today
+            while True:
+                if Task.objects.filter(user=user, title=title, is_recurring=True, status="completed", start_time__date=check_date).exists():
+                    streak += 1
+                    check_date -= timedelta(days=1)
+                else:
+                    break
+
+            total_completed = Task.objects.filter(user=user, title=title, is_recurring=True, status="completed").count()
+            result.append({"title": title, "streak": streak, "weekly": weekly, "total_completed": total_completed})
+
+        return Response(result)

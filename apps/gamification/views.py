@@ -1,14 +1,48 @@
-from rest_framework import viewsets, mixins
+from rest_framework import viewsets
+from rest_framework.response import Response
 from .models import Achievement, UserAchievement, XPLog, StreakRecord, DailyChallenge, UserDailyChallenge
 from .serializers import (
-    AchievementSerializer, UserAchievementSerializer, XPLogSerializer,
+    UserAchievementSerializer, XPLogSerializer,
     StreakRecordSerializer, DailyChallengeSerializer, UserDailyChallengeSerializer,
 )
 
 
 class AchievementViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Achievement.objects.all()
-    serializer_class = AchievementSerializer
+
+    def list(self, request):
+        user = request.user
+        achievements = Achievement.objects.all()
+        user_achievements = {ua.achievement_id: ua for ua in UserAchievement.objects.filter(user=user)}
+
+        result = []
+        for a in achievements:
+            ua = user_achievements.get(a.id)
+            progress = 0
+            if a.requirement_type == "streak":
+                progress = user.streak_count
+            elif a.requirement_type == "tasks_completed":
+                progress = user.total_completed_tasks
+            elif a.requirement_type == "level":
+                progress = user.level
+            elif a.requirement_type == "xp":
+                progress = user.total_xp
+
+            result.append({
+                "id": a.id,
+                "name": a.name,
+                "description": a.description,
+                "icon": a.icon,
+                "requirement_type": a.requirement_type,
+                "requirement_value": a.requirement_value,
+                "progress": min(progress, a.requirement_value),
+                "unlocked": ua is not None,
+                "unlocked_at": ua.unlocked_at.isoformat() if ua else None,
+            })
+        return Response(result)
+
+    def retrieve(self, request, pk=None):
+        return self.list(request)
 
 
 class UserAchievementViewSet(viewsets.ReadOnlyModelViewSet):
