@@ -39,12 +39,17 @@ class TaskViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"])
     def today(self, request):
-        today = timezone.now().astimezone(IST).date()
+        date_str = request.query_params.get('date')
+        if date_str:
+            from datetime import datetime as dt
+            target_date = dt.strptime(date_str, '%Y-%m-%d').date()
+        else:
+            target_date = timezone.now().astimezone(IST).date()
         timezone.activate(IST)
         tasks = self.get_queryset().filter(
-            start_time__date=today
+            start_time__date=target_date
         ).exclude(status='missed').exclude(
-            task_type='timeframe', timeframe_days__isnull=False  # Exclude parent timeframe tasks
+            task_type='timeframe', timeframe_days__isnull=False
         )
         timezone.deactivate()
         return Response(TaskSerializer(tasks, many=True).data)
