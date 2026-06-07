@@ -3,7 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from .models import ScheduledEvent
 from .serializers import ScheduledEventSerializer
-from .services import process_expired_tasks
+from .services import process_expired_tasks, seed_2week_plan
 
 
 class SchedulerViewSet(viewsets.ReadOnlyModelViewSet):
@@ -15,4 +15,9 @@ class SchedulerViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=False, methods=["post"])
     def process_expired(self, request):
         result = process_expired_tasks(request.user)
+        return Response(result)
+
+    @action(detail=False, methods=["post"])
+    def seed_plan(self, request):
+        result = seed_2week_plan(request.user)
         return Response(result)
