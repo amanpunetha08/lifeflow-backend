@@ -70,5 +70,8 @@ class Task(TimeStampedModel):
     timeframe_start_date = models.DateField(null=True, blank=True)
     timeframe_end_date = models.DateField(null=True, blank=True)
 
+    # Study log / TRAP methodology notes
+    notes = models.TextField(blank=True, help_text="Log your progress, TRAP notes, learnings")
+
     def __str__(self):
         return self.title
