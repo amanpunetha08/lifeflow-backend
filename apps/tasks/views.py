@@ -7,14 +7,24 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from django_filters import rest_framework as filters
 from .models import Task, Tag
 from .serializers import TaskSerializer, TagSerializer
 
 IST = zoneinfo.ZoneInfo("Asia/Kolkata")
 
 
+class TaskFilter(filters.FilterSet):
+    start_time__date = filters.DateFilter(field_name='start_time', lookup_expr='date')
+
+    class Meta:
+        model = Task
+        fields = ['status', 'task_type', 'priority', 'category']
+
+
 class TaskViewSet(viewsets.ModelViewSet):
     serializer_class = TaskSerializer
+    filterset_class = TaskFilter
 
     def get_queryset(self):
         return Task.objects.filter(user=self.request.user).order_by("-created_at")
