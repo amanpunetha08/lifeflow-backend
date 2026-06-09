@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.urls import path, include
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
-from apps.analytics.views import AnalyticsView
+from apps.analytics.views import AnalyticsView, ProgressReportView
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -10,6 +10,7 @@ urlpatterns = [
     path("api/", include("apps.gamification.urls")),
     path("api/", include("apps.scheduler.urls")),
     path("api/analytics/", AnalyticsView.as_view(), name="analytics"),
+    path("api/analytics/report/", ProgressReportView.as_view(), name="progress-report"),
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
 ]

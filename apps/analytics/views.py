@@ -12,6 +12,91 @@ from apps.gamification.models import XPLog, StreakRecord
 IST = zoneinfo.ZoneInfo("Asia/Kolkata")
 
 
+class ProgressReportView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        now = timezone.now().astimezone(IST)
+        today = now.date()
+        days = int(request.query_params.get("days", 2))
+        start_date = today - timedelta(days=days - 1)
+
+        timezone.activate(IST)
+        tasks = Task.objects.filter(user=user, start_time__date__gte=start_date, start_time__date__lte=today)
+
+        # Per-day breakdown
+        daily = []
+        for i in range(days):
+            d = start_date + timedelta(days=i)
+            day_tasks = tasks.filter(start_time__date=d)
+            completed = day_tasks.filter(status="completed")
+            missed = day_tasks.filter(status="missed")
+            pending = day_tasks.filter(status__in=["todo", "in_progress"])
+
+            day_data = {
+                "date": str(d),
+                "total": day_tasks.count(),
+                "completed": completed.count(),
+                "missed": missed.count(),
+                "pending": pending.count(),
+                "completion_rate": round(completed.count() / max(day_tasks.count(), 1) * 100),
+                "tasks": []
+            }
+
+            for t in day_tasks.order_by("start_time"):
+                day_data["tasks"].append({
+                    "title": t.title,
+                    "status": t.status,
+                    "category": t.category,
+                    "xp_reward": t.xp_reward,
+                    "notes": t.notes or "",
+                    "completed_at": t.completed_at.isoformat() if t.completed_at else None,
+                })
+
+            daily.append(day_data)
+
+        # Category breakdown
+        categories = {}
+        for cat in tasks.values_list("category", flat=True).distinct():
+            cat_tasks = tasks.filter(category=cat)
+            categories[cat] = {
+                "total": cat_tasks.count(),
+                "completed": cat_tasks.filter(status="completed").count(),
+                "rate": round(cat_tasks.filter(status="completed").count() / max(cat_tasks.count(), 1) * 100),
+            }
+
+        # Notes summary (non-empty notes from completed tasks)
+        notes_data = list(
+            tasks.filter(notes__gt="", status="completed")
+            .values("title", "notes", "category", "start_time")
+            .order_by("start_time")
+        )
+        for n in notes_data:
+            n["date"] = n.pop("start_time").astimezone(IST).strftime("%Y-%m-%d")
+
+        # XP earned in period
+        xp_earned = XPLog.objects.filter(user=user, created_at__date__gte=start_date, amount__gt=0).aggregate(s=Sum("amount"))["s"] or 0
+
+        timezone.deactivate()
+        return Response({
+            "period": {"start": str(start_date), "end": str(today), "days": days},
+            "summary": {
+                "total_tasks": tasks.count(),
+                "completed": tasks.filter(status="completed").count(),
+                "missed": tasks.filter(status="missed").count(),
+                "pending": tasks.filter(status__in=["todo", "in_progress"]).count(),
+                "completion_rate": round(tasks.filter(status="completed").count() / max(tasks.count(), 1) * 100),
+                "xp_earned": xp_earned,
+                "streak": user.streak_count,
+                "level": user.level,
+            },
+            "categories": categories,
+            "daily": daily,
+            "notes_log": notes_data,
+        })
+
+
 class AnalyticsView(APIView):
     permission_classes = [IsAuthenticated]
 
