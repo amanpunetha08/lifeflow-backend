@@ -139,6 +139,7 @@ class AnalyticsView(APIView):
             "productivity_score": productivity,
             "xp_earned_today": xp_today,
             "discipline_score": float(user.discipline_score),
+            "streak": user.streak_count,
             "tasks_completed_change": pct_change(completed_this_week, completed_last_week),
             "focus_time_change": pct_change(focus_this_week, focus_last_week),
             "productivity_change": pct_change(productivity, productivity_last),
