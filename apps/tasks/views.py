@@ -43,6 +43,22 @@ class TaskViewSet(viewsets.ModelViewSet):
         user.total_completed_tasks += 1
         user.discipline_score = min(100, user.discipline_score + 1)
         user.chaos_meter = max(0, user.chaos_meter - 1)
+
+        # Update streak: increment if this is the first completion today
+        today = timezone.now().astimezone(IST).date()
+        already_completed_today = Task.objects.filter(
+            user=user, status="completed", completed_at__date=today
+        ).exclude(pk=task.pk).exists()
+        if not already_completed_today:
+            # First completion today — check if yesterday had completions
+            yesterday = today - timedelta(days=1)
+            had_yesterday = Task.objects.filter(
+                user=user, status="completed", completed_at__date=yesterday
+            ).exists()
+            if had_yesterday or user.streak_count == 0:
+                user.streak_count += 1
+                user.longest_streak = max(user.longest_streak, user.streak_count)
+
         user.save()
         XPLog.objects.create(user=user, amount=task.xp_reward, reason=f"Completed: {task.title}", task=task)
         return Response(TaskSerializer(task).data)
